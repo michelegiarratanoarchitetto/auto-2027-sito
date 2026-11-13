@@ -119,7 +119,7 @@
   function disegnaTutto() {
     Object.values(grafici).forEach(g => g && g.destroy()); grafici = {};
     vVerdetto(); vCandidate(); vConfronto(); vConti(); vNovita(); vStaff();
-    $('#foot').innerHTML = `Aggiornato da Claude e dallo staff il ${dataIt(D.generato_il.slice(0, 10), { day: 'numeric', month: 'long', year: 'numeric' })}. Prossimo aggiornamento: domenica. Dati di fonte e stime sono distinti in ogni scheda; i prezzi vanno sempre confermati in concessionaria. Foto: Wikimedia Commons, autori indicati nelle schede.`;
+    $('#foot').innerHTML = `Aggiornato da Claude e dallo staff il ${dataIt(D.generato_il.slice(0, 10), { day: 'numeric', month: 'long', year: 'numeric' })}. Prossimo aggiornamento: martedì. Dati di fonte e stime sono distinti in ogni scheda; i prezzi vanno sempre confermati in concessionaria. Foto: Wikimedia Commons, autori indicati nelle schede.`;
   }
 
   // ---------- componenti ----------
@@ -207,6 +207,8 @@
       </div>
 
       ${bloccoMensile(top)}
+
+      ${bloccoBonus()}
 
       ${bloccoFisco()}
 
@@ -470,7 +472,7 @@
           ${slider('cBenz', 'Prezzo benzina', P.cx5.prezzo_benzina, 1.4, 2.4, 0.01, v => num(v, 2) + ' €/l')}
           ${slider('cAnt', 'Anticipo', f.anticipo, 0, P.finanziamento.liquidita + 10000, 500, eur)}
           ${slider('cTan', 'Tasso (TAN)', f.tan * 100, 0, 9, 0.1, v => num(v, 2) + '%')}
-          ${slider('cMesi', 'Durata finanziamento', f.mesi, 24, 120, 12, v => v + ' mesi')}
+          ${slider('cMesi', 'Durata finanziamento', f.mesi, 24, P.finanziamento.mesi_massimi || 60, 12, v => v + ' mesi')}
           ${slider('cVal', 'Valore CX-5 a maggio 2027 (privato)', P.cx5.valore_privato_maggio_2027, 16000, 26000, 250, eur, (P.cx5.quotazioni_quattroruote || []).slice(-1).map(q => `Quattroruote: ${eur(q.privato)} a ${num(q.km)} km (${dataIt(q.data)})`).join(''))}
           <div class="campo"><label>Dove ricarichi</label><div class="mix">
             ${slider('mUff', 'In ufficio (gratis)', Math.round(mix.ufficio_gratis * 100), 0, 100, 5, v => v + '%')}
@@ -561,6 +563,27 @@
     });
   }
 
+  function bloccoBonus() {
+    const b = (D.contesto || {}).bonus_agevolazioni; if (!b || !b.voci) return '';
+    const stato = v => { const t = String(v.il_cliente_rientra || '').toLowerCase(); return t.startsWith('sì') || t.startsWith('si') ? 'si' : t.startsWith('no') ? 'no' : 'forse'; };
+    const ord = { si: 0, forse: 1, no: 2 };
+    const voci = [...b.voci].sort((x, y) => ord[stato(x)] - ord[stato(y)]);
+    const etichetta = { si: 'ti spetta', forse: 'da verificare', no: 'non ti spetta' };
+    return `<div class="blocco"><header><h2>Bonus e agevolazioni</h2><span class="muto piccolo">Controllati ogni martedì · aggiornati il ${esc(b.aggiornato_il || '')}</span></header>
+      <div class="pannello">
+        <p style="max-width:75ch">${esc(b.sintesi || '')}</p>
+        <div class="risultato" style="margin:14px 0">
+          <div><small>Vantaggio realistico atteso</small><b class="pos-num">${eur(b.totale_atteso_eur)}</b></div>
+          <div><small>Nel caso migliore (improbabile)</small><b>${eur(b.totale_possibile_eur)}</b></div>
+          <div><small>Incentivi statali oggi</small><b>0 €</b></div>
+        </div>
+        <div class="tabella-wrap" style="box-shadow:none"><table>
+          <thead><tr><th>Voce</th><th>Importo</th><th>Per te</th></tr></thead>
+          <tbody>${voci.map(v => `<tr><td><b>${esc(v.nome)}</b><div class="muto piccolo">${esc(v.ente || '')}${v.scadenza_o_stato ? ' · ' + esc(v.scadenza_o_stato) : ''}</div></td><td class="piccolo">${esc(v.importo || '')}</td><td class="piccolo"><span class="chip ${stato(v) === 'si' ? 'si' : stato(v) === 'no' ? 'no' : ''}">${etichetta[stato(v)]}</span><div style="margin-top:4px">${esc(String(v.il_cliente_rientra || '').replace(/^(sì|si|no|da verificare)\s*[-–(]?\s*/i, ''))}</div></td></tr>`).join('')}</tbody>
+        </table></div>
+        ${(b.azioni || []).length ? `<h3 style="margin-top:16px">Cosa fare</h3><ul class="piccolo" style="margin:8px 0 0;padding-left:18px;display:grid;gap:6px">${b.azioni.map(a => `<li>${esc(typeof a === 'string' ? a : (a.azione || a.testo || JSON.stringify(a)))}</li>`).join('')}</ul>` : ''}
+      </div></div>`;
+  }
   function bloccoMensile(top) {
     const c = P.cx5, ev = P.ev;
     const benz = P.km_anno * c.consumo_l_100km / 100 * c.prezzo_benzina / 12;
@@ -585,7 +608,7 @@
     const f = P.finanziamento, max = f.anticipo_massimo || f.liquidita || 17000;
     const totale = r.s.prezzo + P.ev.spese_immatricolazione;
     const anticipi = [...new Set([Math.round(max * 0.6 / 500) * 500, Math.round(max * 0.8 / 500) * 500, max])];
-    const durate = [48, 60, 72, 84, 96];
+    const durate = [36, 48, 60, 72, 84].filter(m => m <= (P.finanziamento.mesi_massimi || 84));
     const lim = P.rata_massima || Infinity;
     const calc = (ant, mesi) => {
       const cap = totale - ant + f.spese_istruttoria, rata = M.rata(cap, f.tan, mesi);
@@ -602,10 +625,10 @@
         <thead><tr><th>Anticipo</th>${durate.map(m => `<th>${m} mesi</th>`).join('')}</tr></thead>
         <tbody>${anticipi.map(a => `<tr><th>${eur(a)}</th>${durate.map(m => { const c = calc(a, m); const best = a === consiglioAnticipo && m === durataOk; return `<td class="${best ? 'meglio' : ''}" style="${c.rata > lim ? 'opacity:.55' : ''}">${eur(c.rata)}/mese<div class="muto piccolo">interessi ${eur(c.interessi)}</div></td>`; }).join('')}</tr>`).join('')}</tbody>
       </table></div>
-      <p class="piccolo ${durataOk ? '' : 'neg-num'}" style="margin-top:10px">${lim < Infinity ? (durataOk ? `<b>Con la tua rata massima di ${eur(lim)}:</b> servono ${durataOk} mesi con ${eur(consiglioAnticipo)} di anticipo. In grigio le combinazioni sopra il limite.` : `<b>Con la tua rata massima di ${eur(lim)} quest'auto non ci sta</b> nemmeno in 96 mesi: servirebbe un prezzo intorno a ${eur(prezzoMax(84))} (84 mesi) o ${eur(prezzoMax(60))} (60 mesi).`) : ''}</p>
+      <p class="piccolo ${durataOk ? '' : 'neg-num'}" style="margin-top:10px">${lim < Infinity ? (durataOk ? `<b>Con la tua rata massima di ${eur(lim)}:</b> servono ${durataOk} mesi con ${eur(consiglioAnticipo)} di anticipo. In grigio le combinazioni sopra il limite.` : `<b>Con la tua rata massima di ${eur(lim)} in ${durate[durate.length - 1]} mesi quest'auto non ci sta:</b> con ${eur(max)} di anticipo servirebbe un prezzo finale (sconti e bonus compresi) intorno a ${eur(prezzoMax(durate[durate.length - 1]))}, cioè ${eur(r.s.prezzo - prezzoMax(durate[durate.length - 1]))} in meno di oggi.`) : ''}</p>
       <ul class="piccolo" style="margin:12px 0 0;padding-left:18px;display:grid;gap:6px">
         <li><b>Anticipo:</b> ${f.tan > rend ? `metti il massimo (${eur(max)}): il finanziamento costa il ${num(f.tan * 100, 2)}%, più di quanto renderebbero quei soldi (~${num(rend * 100, 1)}%).` : `tieni l'anticipo basso: il finanziamento costa meno di quanto rendono i tuoi soldi.`}</li>
-        <li><b>Durata:</b> la più corta che rispetta la tua rata massima. Ogni anno in più di finanziamento costa circa ${eur((calc(consiglioAnticipo, 96).interessi - calc(consiglioAnticipo, 48).interessi) / 4)} di interessi. Puoi sempre anticipare l'estinzione se avanzano soldi (penale massima 1%).</li>
+        <li><b>Durata:</b> la più corta che rispetta la tua rata massima. Ogni anno in più di finanziamento costa circa ${eur((calc(consiglioAnticipo, 60).interessi - calc(consiglioAnticipo, 36).interessi) / 2)} di interessi. Puoi sempre anticipare l'estinzione se avanzano soldi (penale massima 1%).</li>
         <li><b>Formula:</b> chiedi ammortamento completo, senza maxirata. Se la promo migliore è solo con maxirata, fatti scrivere il costo di estinzione anticipata e fai il conto: spesso conviene prendere la promo e chiudere prima.</li>
         <li><b>Trattativa:</b> prima concorda il prezzo dell'auto, poi il finanziamento. Chiedi per iscritto TAEG e modulo SECCI e confrontali con un prestito della tua banca. Con Mazda fai valere che sei già cliente: chiedi il tasso fedeltà, storicamente 1-2 punti sotto lo standard.</li>
         <li><b>Quando:</b> raccogli i preventivi tra gennaio e marzo, firma a fine trimestre (seconda metà di marzo), quando i concessionari devono chiudere gli obiettivi. La raccomandata per restituire la CX-5 va spedita entro il 16 marzo.</li>
@@ -674,7 +697,7 @@
   function vStaff() {
     const cx = (D.contesto || {});
     $('#tab-staff').innerHTML = `
-      <header style="margin-bottom:14px"><h2>Lo staff</h2><p class="muto" style="margin-top:6px">Ogni domenica ognuno fa il suo lavoro; il direttore mette insieme il verdetto.</p></header>
+      <header style="margin-bottom:14px"><h2>Lo staff</h2><p class="muto" style="margin-top:6px">Ogni martedì ognuno fa il suo lavoro; il direttore mette insieme il verdetto.</p></header>
       <div class="staff-grid">${(D.staff || []).map(s => `<article class="agente">
         <header><div class="avatar" style="background:var(${s.colore})">${esc(s.sigla)}</div><div><h3>${esc(s.nome)}</h3><span class="muto piccolo">${esc(s.ruolo)}</span></div></header>
         <ul>${(s.compiti || []).map(c => `<li>${esc(c)}</li>`).join('')}</ul>
