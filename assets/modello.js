@@ -176,6 +176,11 @@
       if (dim.lunghezza_mm && dim.lunghezza_mm < 4550) r.esclusioni.push(`più corta della CX-5 (${(dim.lunghezza_mm / 1000).toFixed(2)} m)`);
       if (dim.bagagliaio_l && dim.bagagliaio_l < 440) r.esclusioni.push(`bagagliaio ${dim.bagagliaio_l} L, troppo piccolo`);
       else if (dim.bagagliaio_l && dim.bagagliaio_l < 480) r.avvisi.push(`bagagliaio ${dim.bagagliaio_l} L, meno dei 506 L della CX-5`);
+      if (p.rata_massima && r.s.rata > p.rata_massima * 1.02) {
+        let n = p.finanziamento.mesi; while (n < 120 && M.rata(r.s.finanziato, p.finanziamento.tan, n) > p.rata_massima) n++;
+        r.mesiPerRata = n;
+        r.avvisi.push(`rata ${Math.round(r.s.rata)} € in ${p.finanziamento.mesi} mesi, sopra i tuoi ${p.rata_massima} €: servirebbero ${n} mesi o un prezzo più basso`);
+      }
       r.reale = Math.round(reale);
       r.idonea = r.esclusioni.length === 0;
     });

@@ -206,6 +206,8 @@
         </div>
       </div>
 
+      ${bloccoMensile(top)}
+
       ${bloccoFisco()}
 
       ${v.cambiamenti && v.cambiamenti.length ? `<div class="blocco"><header><h2>Cosa è cambiato questa settimana</h2></header>
@@ -468,7 +470,7 @@
           ${slider('cBenz', 'Prezzo benzina', P.cx5.prezzo_benzina, 1.4, 2.4, 0.01, v => num(v, 2) + ' €/l')}
           ${slider('cAnt', 'Anticipo', f.anticipo, 0, P.finanziamento.liquidita + 10000, 500, eur)}
           ${slider('cTan', 'Tasso (TAN)', f.tan * 100, 0, 9, 0.1, v => num(v, 2) + '%')}
-          ${slider('cMesi', 'Durata finanziamento', f.mesi, 12, 84, 12, v => v + ' mesi')}
+          ${slider('cMesi', 'Durata finanziamento', f.mesi, 24, 120, 12, v => v + ' mesi')}
           ${slider('cVal', 'Valore CX-5 a maggio 2027 (privato)', P.cx5.valore_privato_maggio_2027, 16000, 26000, 250, eur, (P.cx5.quotazioni_quattroruote || []).slice(-1).map(q => `Quattroruote: ${eur(q.privato)} a ${num(q.km)} km (${dataIt(q.data)})`).join(''))}
           <div class="campo"><label>Dove ricarichi</label><div class="mix">
             ${slider('mUff', 'In ufficio (gratis)', Math.round(mix.ufficio_gratis * 100), 0, 100, 5, v => v + '%')}
@@ -559,27 +561,51 @@
     });
   }
 
+  function bloccoMensile(top) {
+    const c = P.cx5, ev = P.ev;
+    const benz = P.km_anno * c.consumo_l_100km / 100 * c.prezzo_benzina / 12;
+    const gestCX = y => benz + (c.manutenzione_anno * Math.pow(1 + c.manutenzione_crescita_anno, y) + c.assicurazione_anno + c.bollo_anno) / 12;
+    const rataOggi = (c.storia || {}).rata || 0;
+    const contanti = Math.min(P.finanziamento.anticipo_massimo || P.finanziamento.anticipo, c.maxirata);
+    const rataTieni = M.rata(c.maxirata - contanti, 0.0699, 36);
+    const gestEV = a => (P.km_anno * M.consumo(a) * (1 + P.perdite_ricarica_ac) / 100 * M.costoKwh(P) + ev.manutenzione_anno + P.km_anno / ev.pneumatici_ogni_km * ev.costo_treno_gomme + ev.assicurazione_anno) / 12;
+    const anniFin = Math.round(P.finanziamento.mesi / 12 * 10) / 10;
+    const riga = (nome, durante, dettaglio, dopo, nota) => `<tr><th>${nome}</th><td><b>${eur(durante)}</b><div class="muto piccolo">${dettaglio}</div></td><td>${dopo != null ? eur(dopo) : '—'}</td><td class="piccolo">${nota || ''}</td></tr>`;
+    return `<div class="blocco"><header><h2>Quanto spendi al mese</h2><span class="muto piccolo">Rata + benzina o energia + manutenzione e gomme + assicurazione + bollo</span></header>
+      <div class="tabella-wrap"><table>
+        <thead><tr><th></th><th>Durante il finanziamento</th><th>Dopo</th><th></th></tr></thead>
+        <tbody>
+          ${rataOggi ? riga('Oggi, con la CX-5', rataOggi + gestCX(0), `rata ${eur(rataOggi)} + benzina ${eur(benz)} + resto ${eur(gestCX(0) - benz)}`, null, 'fino ad aprile 2027') : ''}
+          ${riga('Tieni la CX-5', rataTieni + gestCX(0), `rata ${eur(rataTieni)} per 3 anni (riscatto: ${eur(contanti)} in contanti + resto finanziato) + benzina ${eur(benz)} + resto`, gestCX(5), 'la manutenzione cresce con gli anni')}
+          ${top.map(r => riga(`${esc(r.a.marca)} ${esc(r.a.modello)}`, r.s.rata + gestEV(r.a), `rata ${eur(r.s.rata)} per ${anniFin} anni + energia, manutenzione e assicurazione ${eur(gestEV(r.a))}`, gestEV(r.a), r.s.rata > (P.rata_massima || Infinity) * 1.02 ? `<span class="neg-num">rata sopra i tuoi ${eur(P.rata_massima)}</span>` : `<span class="pos-num">rata entro i tuoi ${eur(P.rata_massima)}</span>`)).join('')}
+        </tbody></table></div>
+      <p class="muto piccolo" style="margin-top:8px">La rata dell'elettrica è più alta di quella di oggi, ma la benzina (circa ${eur(benz)} al mese) quasi sparisce: la spesa totale al mese scende. Durata del finanziamento modificabile nella sezione Conti.</p></div>`;
+  }
   function pannelloStrategia(r) {
     const f = P.finanziamento, max = f.anticipo_massimo || f.liquidita || 17000;
     const totale = r.s.prezzo + P.ev.spese_immatricolazione;
     const anticipi = [...new Set([Math.round(max * 0.6 / 500) * 500, Math.round(max * 0.8 / 500) * 500, max])];
-    const durate = [36, 48, 60, 72];
+    const durate = [48, 60, 72, 84, 96];
+    const lim = P.rata_massima || Infinity;
     const calc = (ant, mesi) => {
       const cap = totale - ant + f.spese_istruttoria, rata = M.rata(cap, f.tan, mesi);
       return { rata, interessi: rata * mesi - cap + f.spese_istruttoria };
     };
     const rend = f.rendimento_alternativo_liquidita || 0;
     const consiglioAnticipo = f.tan > rend ? max : anticipi[0];
+    const durataOk = durate.find(m => calc(consiglioAnticipo, m).rata <= lim);
+    const prezzoMax = m => Math.round(lim * (1 - Math.pow(1 + f.tan / 12, -m)) / (f.tan / 12) + max - f.spese_istruttoria - P.ev.spese_immatricolazione);
     return `<div class="pannello blocco" style="margin-top:16px">
       <h3>Strategia d'acquisto per la ${esc(r.a.marca)} ${esc(r.a.modello)}</h3>
       <p class="piccolo" style="margin-top:6px">Prezzo stimato ${eur(r.s.prezzo)} + immatricolazione. Tasso usato: TAN ${num(f.tan * 100, 2)}% (modificabile qui sopra). In verde la combinazione consigliata.</p>
       <div class="tabella-wrap" style="box-shadow:none;margin-top:10px"><table>
         <thead><tr><th>Anticipo</th>${durate.map(m => `<th>${m} mesi</th>`).join('')}</tr></thead>
-        <tbody>${anticipi.map(a => `<tr><th>${eur(a)}</th>${durate.map(m => { const c = calc(a, m); const best = a === consiglioAnticipo && m === 48; return `<td class="${best ? 'meglio' : ''}">${eur(c.rata)}/mese<div class="muto piccolo">interessi ${eur(c.interessi)}</div></td>`; }).join('')}</tr>`).join('')}</tbody>
+        <tbody>${anticipi.map(a => `<tr><th>${eur(a)}</th>${durate.map(m => { const c = calc(a, m); const best = a === consiglioAnticipo && m === durataOk; return `<td class="${best ? 'meglio' : ''}" style="${c.rata > lim ? 'opacity:.55' : ''}">${eur(c.rata)}/mese<div class="muto piccolo">interessi ${eur(c.interessi)}</div></td>`; }).join('')}</tr>`).join('')}</tbody>
       </table></div>
+      <p class="piccolo ${durataOk ? '' : 'neg-num'}" style="margin-top:10px">${lim < Infinity ? (durataOk ? `<b>Con la tua rata massima di ${eur(lim)}:</b> servono ${durataOk} mesi con ${eur(consiglioAnticipo)} di anticipo. In grigio le combinazioni sopra il limite.` : `<b>Con la tua rata massima di ${eur(lim)} quest'auto non ci sta</b> nemmeno in 96 mesi: servirebbe un prezzo intorno a ${eur(prezzoMax(84))} (84 mesi) o ${eur(prezzoMax(60))} (60 mesi).`) : ''}</p>
       <ul class="piccolo" style="margin:12px 0 0;padding-left:18px;display:grid;gap:6px">
         <li><b>Anticipo:</b> ${f.tan > rend ? `metti il massimo (${eur(max)}): il finanziamento costa il ${num(f.tan * 100, 2)}%, più di quanto renderebbero quei soldi (~${num(rend * 100, 1)}%).` : `tieni l'anticipo basso: il finanziamento costa meno di quanto rendono i tuoi soldi.`}</li>
-        <li><b>Durata:</b> la più corta con una rata che sostieni senza pensieri. Passare da 60 a 48 mesi fa risparmiare circa ${eur(calc(consiglioAnticipo, 60).interessi - calc(consiglioAnticipo, 48).interessi)} di interessi.</li>
+        <li><b>Durata:</b> la più corta che rispetta la tua rata massima. Ogni anno in più di finanziamento costa circa ${eur((calc(consiglioAnticipo, 96).interessi - calc(consiglioAnticipo, 48).interessi) / 4)} di interessi. Puoi sempre anticipare l'estinzione se avanzano soldi (penale massima 1%).</li>
         <li><b>Formula:</b> chiedi ammortamento completo, senza maxirata. Se la promo migliore è solo con maxirata, fatti scrivere il costo di estinzione anticipata e fai il conto: spesso conviene prendere la promo e chiudere prima.</li>
         <li><b>Trattativa:</b> prima concorda il prezzo dell'auto, poi il finanziamento. Chiedi per iscritto TAEG e modulo SECCI e confrontali con un prestito della tua banca. Con Mazda fai valere che sei già cliente: chiedi il tasso fedeltà, storicamente 1-2 punti sotto lo standard.</li>
         <li><b>Quando:</b> raccogli i preventivi tra gennaio e marzo, firma a fine trimestre (seconda metà di marzo), quando i concessionari devono chiudere gli obiettivi. La raccomandata per restituire la CX-5 va spedita entro il 16 marzo.</li>
