@@ -360,6 +360,21 @@
           <div><small>Vai in guadagno dal</small><b>${eco.pareggio != null ? (2027 + eco.pareggio) : 'mai'}</b></div>
           <div><small>Rata (anticipo ${eur(s.anticipo)}, ${P.finanziamento.mesi} mesi)</small><b>${eur(s.rata)}/mese</b></div>
         </div>
+        ${(() => {
+          const fu = M.autonomiaFutura(a, P.orizzonte_anni), viaggio = 300;
+          const ok = fu.inverno && fu.inverno >= viaggio * 1.1;
+          return `<div class="pannello" style="box-shadow:none;background:var(--carta-2)">
+            <h3>Tra ${P.orizzonte_anni} anni (circa ${num(P.km_anno * P.orizzonte_anni)} km)</h3>
+            <div class="specs" style="margin-top:10px">
+              <div><small>Batteria residua stimata</small><b>~${Math.round(fu.salute * 100)}%</b></div>
+              <div><small>Autonomia reale, clima mite</small><b>~${num(fu.mite)} km</b></div>
+              <div><small>Autonomia reale, inverno</small><b>~${num(fu.inverno)} km</b></div>
+              <div><small>Garanzia batteria</small><b>${esc((a.garanzia || {}).batteria || '—')}</b></div>
+            </div>
+            <p class="piccolo ${ok ? 'pos-num' : 'neg-num'}" style="margin-top:8px">${ok ? `Anche nel ${2027 + P.orizzonte_anni}, d'inverno, il tuo viaggio tipo da ${viaggio} km andata e ritorno si fa senza ricaricare.` : `Nel ${2027 + P.orizzonte_anni}, d'inverno, per il viaggio da ${viaggio} km andata e ritorno potrebbe servire una breve sosta di ricarica.`}</p>
+            <p class="muto piccolo" style="margin-top:4px">Stima: ${/LFP|LMFP/i.test(chim(a)) ? 'batteria LFP, perde circa l\'1,2% l\'anno e si può caricare al 100% senza danni' : 'batteria NMC, perde circa l\'1,7% l\'anno se caricata di solito all\'80%'}.</p>
+          </div>`;
+        })()}
         <div><h3>Caratteristiche principali</h3><div class="specs" style="margin-top:10px">${spec.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('')}</div></div>
         ${(a.varianti_batteria || []).length > 1 ? `<div><h3>Versioni di batteria in Italia</h3><div class="chips" style="margin-top:10px">${a.varianti_batteria.map(v => {
           const testo = `${num(v.kwh, 1)} kWh ${esc(v.chimica || '')}${v.prezzo_listino ? ' · ' + eur(v.prezzo_listino) : ''}`;
@@ -403,6 +418,8 @@
       ['Autonomia reale mite', r => (r.a.autonomia_reale_km || {}).misto_mite, 'max', x => num(x) + ' km'],
       ['Autonomia reale inverno', r => (r.a.autonomia_reale_km || {}).inverno, 'max', x => num(x) + ' km'],
       ['Autostrada 130 km/h', r => (r.a.autonomia_reale_km || {}).autostrada_130, 'max', x => num(x) + ' km'],
+      ['Batteria tra 10 anni', r => Math.round(M.salute(r.a, P.orizzonte_anni) * 100), 'max', x => '~' + x + '%'],
+      ['Autonomia inverno tra 10 anni', r => M.autonomiaFutura(r.a, P.orizzonte_anni).inverno, 'max', x => '~' + num(x) + ' km'],
       ['Consumo reale', r => M.consumo(r.a), 'min', x => num(x, 1) + ' kWh/100'],
       ['Ricarica 10-80%', r => (r.a.ricarica || {}).dc_10_80_min, 'min', x => num(x) + ' min'],
       ['Bagagliaio', r => (r.a.dimensioni || {}).bagagliaio_l, 'max', x => num(x) + ' L'],
@@ -483,6 +500,7 @@
                 <tr><th>Valore dopo ${P.orizzonte_anni} anni</th><td>${eur(s.valoreFinale)}</td><td>${eur(base.valoreFinale)}</td></tr>
               </tbody></table></div>
           </div>
+          ${pannelloStrategia(r)}
           ${pannelloTassi()}
           ${energiaPannello(s)}
           <div class="pannello blocco" style="margin-top:16px">
@@ -541,6 +559,33 @@
     });
   }
 
+  function pannelloStrategia(r) {
+    const f = P.finanziamento, max = f.anticipo_massimo || f.liquidita || 17000;
+    const totale = r.s.prezzo + P.ev.spese_immatricolazione;
+    const anticipi = [...new Set([Math.round(max * 0.6 / 500) * 500, Math.round(max * 0.8 / 500) * 500, max])];
+    const durate = [36, 48, 60, 72];
+    const calc = (ant, mesi) => {
+      const cap = totale - ant + f.spese_istruttoria, rata = M.rata(cap, f.tan, mesi);
+      return { rata, interessi: rata * mesi - cap + f.spese_istruttoria };
+    };
+    const rend = f.rendimento_alternativo_liquidita || 0;
+    const consiglioAnticipo = f.tan > rend ? max : anticipi[0];
+    return `<div class="pannello blocco" style="margin-top:16px">
+      <h3>Strategia d'acquisto per la ${esc(r.a.marca)} ${esc(r.a.modello)}</h3>
+      <p class="piccolo" style="margin-top:6px">Prezzo stimato ${eur(r.s.prezzo)} + immatricolazione. Tasso usato: TAN ${num(f.tan * 100, 2)}% (modificabile qui sopra). In verde la combinazione consigliata.</p>
+      <div class="tabella-wrap" style="box-shadow:none;margin-top:10px"><table>
+        <thead><tr><th>Anticipo</th>${durate.map(m => `<th>${m} mesi</th>`).join('')}</tr></thead>
+        <tbody>${anticipi.map(a => `<tr><th>${eur(a)}</th>${durate.map(m => { const c = calc(a, m); const best = a === consiglioAnticipo && m === 48; return `<td class="${best ? 'meglio' : ''}">${eur(c.rata)}/mese<div class="muto piccolo">interessi ${eur(c.interessi)}</div></td>`; }).join('')}</tr>`).join('')}</tbody>
+      </table></div>
+      <ul class="piccolo" style="margin:12px 0 0;padding-left:18px;display:grid;gap:6px">
+        <li><b>Anticipo:</b> ${f.tan > rend ? `metti il massimo (${eur(max)}): il finanziamento costa il ${num(f.tan * 100, 2)}%, più di quanto renderebbero quei soldi (~${num(rend * 100, 1)}%).` : `tieni l'anticipo basso: il finanziamento costa meno di quanto rendono i tuoi soldi.`}</li>
+        <li><b>Durata:</b> la più corta con una rata che sostieni senza pensieri. Passare da 60 a 48 mesi fa risparmiare circa ${eur(calc(consiglioAnticipo, 60).interessi - calc(consiglioAnticipo, 48).interessi)} di interessi.</li>
+        <li><b>Formula:</b> chiedi ammortamento completo, senza maxirata. Se la promo migliore è solo con maxirata, fatti scrivere il costo di estinzione anticipata e fai il conto: spesso conviene prendere la promo e chiudere prima.</li>
+        <li><b>Trattativa:</b> prima concorda il prezzo dell'auto, poi il finanziamento. Chiedi per iscritto TAEG e modulo SECCI e confrontali con un prestito della tua banca. Con Mazda fai valere che sei già cliente: chiedi il tasso fedeltà, storicamente 1-2 punti sotto lo standard.</li>
+        <li><b>Quando:</b> raccogli i preventivi tra gennaio e marzo, firma a fine trimestre (seconda metà di marzo), quando i concessionari devono chiudere gli obiettivi. La raccomandata per restituire la CX-5 va spedita entro il 16 marzo.</li>
+      </ul>
+    </div>`;
+  }
   function pannelloTassi() {
     const f = (D.contesto || {}).finanziamenti; if (!f) return '';
     const off = (f.offerte_case || []).filter(o => o.tan != null);

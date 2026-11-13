@@ -44,6 +44,22 @@
     return pts[pts.length - 1][1];
   };
 
+  // Salute della batteria dopo N anni (stima): LFP ~1,2%/anno, NMC ~1,7%/anno, salvo valore specifico nella scheda.
+  M.salute = (a, anni = 10) => {
+    const b = a.batteria || {};
+    if (b.soh_10_anni) return b.soh_10_anni;
+    const lfp = /LFP|LMFP|fosfat/i.test(b.chimica || '');
+    const nmc = /NMC|NCA|ternar/i.test(b.chimica || '');
+    const perAnno = lfp ? 0.012 : nmc ? 0.017 : 0.015;
+    return +(1 - perAnno * anni).toFixed(2);
+  };
+  M.autonomiaFutura = (a, anni = 10) => {
+    const r = a.autonomia_reale_km || {}, s = M.salute(a, anni);
+    const f = v => v ? Math.round(v * s) : null;
+    const mite = r.misto_mite || (a.wltp_km ? a.wltp_km * 0.85 : null);
+    return { salute: s, mite: f(mite), inverno: f(r.inverno || (mite ? mite * 0.87 : null)), autostrada: f(r.autostrada_130) };
+  };
+
   M.costoKwh = (p) => {
     const mix = p.ricarica_mix, c = p.costo_kwh;
     let tot = 0, peso = 0;
