@@ -174,7 +174,9 @@
       if (reale < soglia * 0.97) r.esclusioni.push(`autonomia reale ~${Math.round(reale)} km, sotto ${soglia}`);
       else if (reale < soglia) r.avvisi.push(`autonomia al limite: ~${Math.round(reale)} km stimati contro ${soglia} richiesti`);
       if (dim.lunghezza_mm && dim.lunghezza_mm < 4550) r.esclusioni.push(`più corta della CX-5 (${(dim.lunghezza_mm / 1000).toFixed(2)} m)`);
-      if (dim.bagagliaio_l && dim.bagagliaio_l < 440) r.esclusioni.push(`bagagliaio ${dim.bagagliaio_l} L, troppo piccolo`);
+      const ok = r.a.accettato_dal_cliente || [];
+      if (ok.includes('bagagliaio')) r.avvisi.push(`bagagliaio ${dim.bagagliaio_l} L, accettato da te`);
+      else if (dim.bagagliaio_l && dim.bagagliaio_l < 440) r.esclusioni.push(`bagagliaio ${dim.bagagliaio_l} L, troppo piccolo`);
       else if (dim.bagagliaio_l && dim.bagagliaio_l < 480) r.avvisi.push(`bagagliaio ${dim.bagagliaio_l} L, meno dei 506 L della CX-5`);
       if (p.rata_massima && r.s.rata > p.rata_massima * 1.02) {
         const mm = p.finanziamento.mesi_massimi || p.finanziamento.mesi, i = p.finanziamento.tan / 12;
