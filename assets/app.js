@@ -678,6 +678,18 @@
   }
 
   // ---------- NOVITÀ ----------
+  function pannelloKm0() {
+    let k = D.offerte_km0; if (k && !Array.isArray(k)) k = k.offerte || [];
+    if (!k || !k.length) return '';
+    const nome = id => { const a = D.auto.find(x => x.id === id); return a ? `${a.marca} ${a.modello}` : id; };
+    const buone = k.filter(o => o.vale_la_pena);
+    return `<div class="pannello blocco"><h2 style="font-size:1.3rem">Offerte km 0</h2>
+      <p class="piccolo" style="margin-top:6px">${buone.length ? `<b class="pos-num">${buone.length} offerte che valgono la pena.</b>` : '<b>Nessuna offerta km 0 conveniente questa settimana</b>: tutte troppo vicine al prezzo trattabile del nuovo.'} Usato escluso.</p>
+      <div class="tabella-wrap" style="box-shadow:none;margin-top:10px"><table>
+        <thead><tr><th>Auto</th><th>Prezzo</th><th>Rispetto al nuovo</th><th>Dove</th></tr></thead>
+        <tbody>${[...k].sort((a, b) => (b.vale_la_pena - a.vale_la_pena)).map(o => `<tr><td><b>${esc(nome(o.id_auto))}</b>${o.vale_la_pena ? ' <span class="chip si">conviene</span>' : ''}<div class="muto piccolo">${esc(o.note || '')}</div></td><td>${eur(o.prezzo)}</td><td>${o.prezzo_nuovo_trattabile ? eur(o.prezzo - o.prezzo_nuovo_trattabile, true) : '—'}</td><td class="piccolo">${esc(o.citta || '')}${o.link ? ` · <a href="${esc(o.link)}" target="_blank" rel="noopener">annuncio</a>` : ''}</td></tr>`).join('')}</tbody>
+      </table></div></div>`;
+  }
   function vNovita() {
     const news = [...(D.news || [])].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
     const cal = [...(D.calendario || [])].sort((a, b) => (a.data_prevista || '').localeCompare(b.data_prevista || ''));
@@ -690,7 +702,8 @@
             ${n.url ? `<a class="piccolo" href="${esc(n.url)}" target="_blank" rel="noopener">Leggi la fonte</a>` : ''}</article>`).join('') || '<p class="muto">Nessuna novità.</p>'}</div></div>
         <div class="pannello"><h2 style="font-size:1.3rem">Cosa aspettarsi fino a giugno</h2>
           <div class="cal" style="margin-top:10px">${cal.map(e => `<div class="evento ${e.tipo === 'scadenza' ? 'scadenza' : ''}"><span class="d">${dataIt(e.data_prevista, { month: 'short', year: 'numeric', ...(e.data_prevista && e.data_prevista.length > 7 ? { day: 'numeric' } : {}) })}</span><div>${esc(e.evento)} <span class="chip">${esc(e.certezza || '')}</span></div></div>`).join('')}</div></div>
-      </div>`;
+      </div>
+      ${pannelloKm0()}`;
   }
 
   // ---------- STAFF ----------
