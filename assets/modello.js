@@ -94,12 +94,14 @@
     return { nome: 'Tengo la CX-5', netto: out, spese, valoreFinale: v0 * Math.pow(k, N) };
   };
 
+  // prezzi "chiavi in mano" includono già immatricolazione e messa su strada
+  M.speseImm = (a, p) => (a && a.chiavi_in_mano) ? 0 : (p.ev.spese_immatricolazione || 0);
   M.scenarioEV = (a, p, opz = {}) => {
     const N = p.orizzonte_anni, km = p.km_anno, f = p.finanziamento, e = p.ev;
     const prezzo = opz.prezzo || M.prezzoEffettivo(a);
     if (!prezzo) return null;
     const uscita = M.uscitaCX5(p);
-    const totale = prezzo + e.spese_immatricolazione;
+    const totale = prezzo + M.speseImm(a, p);
     const anticipo = Math.min(f.anticipo, totale);
     const capitale = Math.max(0, totale - anticipo);
     const finanziato = capitale > 0 ? capitale + f.spese_istruttoria : 0;
@@ -181,7 +183,7 @@
       if (p.rata_massima && r.s.rata > p.rata_massima * 1.02) {
         const mm = p.finanziamento.mesi_massimi || p.finanziamento.mesi, i = p.finanziamento.tan / 12;
         const finMax = p.rata_massima * (1 - Math.pow(1 + i, -mm)) / i;
-        r.prezzoPerRata = Math.round(finMax + (r.s.anticipo || 0) - (p.finanziamento.spese_istruttoria || 0) - (p.ev.spese_immatricolazione || 0));
+        r.prezzoPerRata = Math.round(finMax + (r.s.anticipo || 0) - (p.finanziamento.spese_istruttoria || 0) - M.speseImm(r.a, p));
         r.avvisi.push(`rata ${Math.round(r.s.rata)} € in ${p.finanziamento.mesi} mesi, sopra i tuoi ${p.rata_massima} €: servirebbe un prezzo finale di circa ${r.prezzoPerRata.toLocaleString('it-IT')} € (sconti o bonus per ${Math.round(r.s.prezzo - r.prezzoPerRata).toLocaleString('it-IT')} €)`);
       }
       r.reale = Math.round(reale);

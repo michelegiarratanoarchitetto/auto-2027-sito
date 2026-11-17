@@ -110,7 +110,7 @@
             <div class="fisco-val ${s.beneficio_10_anni[1] > 0 ? 'pos-num' : s.beneficio_10_anni[0] < 0 ? 'neg-num' : ''}">${s.beneficio_10_anni[0] === s.beneficio_10_anni[1] ? eur(s.beneficio_10_anni[0]) : eur(s.beneficio_10_anni[0], true) + ' / ' + eur(s.beneficio_10_anni[1], true)}</div>
             <details class="fisco-det"><summary>Come funziona</summary><p class="piccolo">${esc(s.come_funziona)}</p><p class="piccolo"><b>Requisiti:</b> ${esc(s.requisiti)}</p><p class="piccolo"><b>Giudizio:</b> ${esc(s.giudizio)}</p></details>
           </div>`).join('')}</div>
-        <p class="muto piccolo" style="margin-top:12px">Beneficio netto in 10 anni rispetto a comprare da privato, su un'auto da circa 45.000 €. Stime: da confermare col commercialista.</p>
+        <p class="muto piccolo" style="margin-top:12px">Beneficio netto in 10 anni rispetto a comprare da privato, su un'auto da 33-45.000 €. Stime: da confermare col commercialista.</p>
       </div></div>`;
   }
   const riga = (id) => classifica.righe.find(r => r.a.id === id);
@@ -447,7 +447,7 @@
     ];
     $('#tab-confronto').innerHTML = `
       <header style="margin-bottom:14px"><h2>Confronto diretto</h2><p class="muto" style="margin-top:6px">Scegli fino a 4 auto. In verde il valore migliore di ogni riga.</p></header>
-      <div class="selettori">${classifica.righe.filter(r => r.a.stato !== 'scartata').map(r => `<button class="filtro" data-id="${r.a.id}" aria-pressed="${confrontoSel.includes(r.a.id)}">${esc(r.a.marca)} ${esc(r.a.modello)}</button>`).join('')}</div>
+      <div class="selettori">${(() => { const vis = classifica.righe.filter(r => r.a.stato !== 'scartata'); const nomi = {}; vis.forEach(r => { const n = r.a.marca + ' ' + r.a.modello; nomi[n] = (nomi[n] || 0) + 1; }); return vis.map(r => { const n = r.a.marca + ' ' + r.a.modello, kwh = (r.a.batteria || {}).kwh_netti || (r.a.batteria || {}).kwh_lordi; return `<button class="filtro" data-id="${r.a.id}" aria-pressed="${confrontoSel.includes(r.a.id)}">${esc(n)}${nomi[n] > 1 && kwh ? ' ' + num(kwh, 0) + ' kWh' : ''}</button>`; }).join(''); })()}</div>
       <div class="tabella-wrap"><table>
         <thead><tr><th></th>${sel.map(r => `<th>${esc(r.a.marca)} ${esc(r.a.modello)}<div class="muto piccolo">${esc(r.a.versione || '')}</div></th>`).join('')}</tr></thead>
         <tbody>${righeT.map(([nome, fn, best, fmt]) => {
@@ -613,13 +613,13 @@
         <tbody>
           ${rataOggi ? riga('Oggi, con la CX-5', rataOggi + gestCX(0), `rata ${eur(rataOggi)} + benzina ${eur(benz)} + resto ${eur(gestCX(0) - benz)}`, null, 'fino ad aprile 2027') : ''}
           ${riga('Tieni la CX-5', rataTieni + gestCX(0), `rata ${eur(rataTieni)} per 3 anni (riscatto: ${eur(contanti)} in contanti + resto finanziato) + benzina ${eur(benz)} + resto`, gestCX(5), 'la manutenzione cresce con gli anni')}
-          ${top.map(r => riga(`${esc(r.a.marca)} ${esc(r.a.modello)}`, r.s.rata + gestEV(r.a), `rata ${eur(r.s.rata)} per ${anniFin} anni + energia, manutenzione e assicurazione ${eur(gestEV(r.a))}`, gestEV(r.a), r.s.rata > (P.rata_massima || Infinity) * 1.02 ? `<span class="neg-num">rata sopra i tuoi ${eur(P.rata_massima)}</span>` : `<span class="pos-num">rata entro i tuoi ${eur(P.rata_massima)}</span>`)).join('')}
+          ${top.map(r => riga(`${esc(r.a.marca)} ${esc(r.a.modello)}`, r.s.rata + gestEV(r.a), `rata ${eur(r.s.rata)} per ${anniFin} anni + energia, manutenzione e assicurazione ${eur(gestEV(r.a))}`, gestEV(r.a), r.s.rata > (P.rata_massima || Infinity) * 1.02 ? `<span class="neg-num">rata sopra i tuoi ${eur(P.rata_massima)}</span>` : r.s.rata > (P.rata_massima || Infinity) ? `<span>rata al limite dei tuoi ${eur(P.rata_massima)}</span>` : `<span class="pos-num">rata entro i tuoi ${eur(P.rata_massima)}</span>`)).join('')}
         </tbody></table></div>
       <p class="muto piccolo" style="margin-top:8px">La rata dell'elettrica è più alta di quella di oggi, ma la benzina (circa ${eur(benz)} al mese) quasi sparisce: la spesa totale al mese scende. Durata del finanziamento modificabile nella sezione Conti.</p></div>`;
   }
   function pannelloStrategia(r) {
     const f = P.finanziamento, max = f.anticipo_massimo || f.liquidita || 17000;
-    const totale = r.s.prezzo + P.ev.spese_immatricolazione;
+    const totale = r.s.prezzo + M.speseImm(r.a, P);
     const anticipi = [...new Set([Math.round(max * 0.6 / 500) * 500, Math.round(max * 0.8 / 500) * 500, max])];
     const durate = [36, 48, 60, 72, 84].filter(m => m <= (P.finanziamento.mesi_massimi || 84));
     const lim = P.rata_massima || Infinity;
@@ -630,10 +630,10 @@
     const rend = f.rendimento_alternativo_liquidita || 0;
     const consiglioAnticipo = f.tan > rend ? max : anticipi[0];
     const durataOk = durate.find(m => calc(consiglioAnticipo, m).rata <= lim);
-    const prezzoMax = m => Math.round(lim * (1 - Math.pow(1 + f.tan / 12, -m)) / (f.tan / 12) + max - f.spese_istruttoria - P.ev.spese_immatricolazione);
+    const prezzoMax = m => Math.round(lim * (1 - Math.pow(1 + f.tan / 12, -m)) / (f.tan / 12) + max - f.spese_istruttoria - M.speseImm(r.a, P));
     return `<div class="pannello blocco" style="margin-top:16px">
       <h3>Strategia d'acquisto per la ${esc(r.a.marca)} ${esc(r.a.modello)}</h3>
-      <p class="piccolo" style="margin-top:6px">Prezzo stimato ${eur(r.s.prezzo)} + immatricolazione. Tasso usato: TAN ${num(f.tan * 100, 2)}% (modificabile qui sopra). In verde la combinazione consigliata.</p>
+      <p class="piccolo" style="margin-top:6px">Prezzo stimato ${eur(r.s.prezzo)}${r.a.chiavi_in_mano ? " chiavi in mano" : " + immatricolazione"}. Tasso usato: TAN ${num(f.tan * 100, 2)}% (modificabile qui sopra). In verde la combinazione consigliata.</p>
       <div class="tabella-wrap" style="box-shadow:none;margin-top:10px"><table>
         <thead><tr><th>Anticipo</th>${durate.map(m => `<th>${m} mesi</th>`).join('')}</tr></thead>
         <tbody>${anticipi.map(a => `<tr><th>${eur(a)}</th>${durate.map(m => { const c = calc(a, m); const best = a === consiglioAnticipo && m === durataOk; return `<td class="${best ? 'meglio' : ''}" style="${c.rata > lim ? 'opacity:.55' : ''}">${eur(c.rata)}/mese<div class="muto piccolo">interessi ${eur(c.interessi)}</div></td>`; }).join('')}</tr>`).join('')}</tbody>
