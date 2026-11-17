@@ -163,6 +163,11 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px 20px 40px; }
 .fisco-det p { margin-top: 6px; max-width: 75ch; }
 @media (max-width: 700px) { .fisco-riga { grid-template-columns: 1fr auto; } .fisco-asse { grid-column: 1 / -1; grid-row: 2; } }
 
+details.marchi summary { cursor: pointer; list-style: none; }
+details.marchi summary::-webkit-details-marker { display: none; }
+details.marchi summary h3::before { content: "▸ "; color: var(--muto); }
+details.marchi[open] summary h3::before { content: "▾ "; }
+
 /* staff in breve */
 .note-staff { display: grid; gap: 12px; }
 .nota { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: start; }

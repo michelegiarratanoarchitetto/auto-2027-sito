@@ -310,7 +310,8 @@
     $('#tab-candidate').innerHTML = `
       <header style="margin-bottom:14px"><h2>Le candidate</h2><p class="muto" style="margin-top:6px">Ordinate per punteggio dello staff. Tocca un'auto per la scheda completa.</p></header>
       <div class="filtri" role="group" aria-label="Filtra">${Object.entries(FILTRI).map(([k, [t, fn]]) => `<button class="filtro" data-f="${k}" aria-pressed="${stato.filtro === k}">${t} <span class="muto">${classifica.righe.filter(fn).length}</span></button>`).join('')}</div>
-      <div class="elenco">${lista.map(r => card(r)).join('') || '<p class="muto">Nessuna auto con questo filtro.</p>'}</div>`;
+      <div class="elenco">${lista.map(r => card(r)).join('') || '<p class="muto">Nessuna auto con questo filtro.</p>'}</div>
+      ${pannelloMarchi()}`;
     $$('#tab-candidate .filtro').forEach(b => b.addEventListener('click', () => { stato.filtro = b.dataset.f; vCandidate(); }));
     $$('#tab-candidate [data-auto]').forEach(b => b.addEventListener('click', () => apriScheda(b.dataset.auto)));
   }
@@ -331,6 +332,18 @@
         ${a.motivo_scarto ? `<p class="piccolo neg-num">${esc(a.motivo_scarto)}</p>` : (!r.idonea && r.esclusioni.length ? `<p class="piccolo neg-num">Fuori dal podio: ${esc(r.esclusioni.join(', '))}</p>` : '')}
         ${r.avvisi && r.avvisi.length ? `<p class="piccolo avviso">${esc(r.avvisi.join('; '))}</p>` : ''}
       </div></button>`;
+  }
+
+  function pannelloMarchi() {
+    const m = D.marchi || []; if (!m.length) return '';
+    const ord = { candidato: 0, 'da monitorare': 1, escluso: 2 };
+    const lista = [...m].sort((a, b) => (ord[a.esito] ?? 3) - (ord[b.esito] ?? 3) || String(a.marchio).localeCompare(String(b.marchio)));
+    const cnt = k => m.filter(x => x.esito === k).length;
+    return `<details class="pannello blocco marchi"><summary><h3 style="display:inline">Tutti i marchi controllati (${m.length})</h3> <span class="muto piccolo">· ${cnt('candidato')} con candidate · ${cnt('da monitorare')} da monitorare · ${cnt('escluso')} esclusi</span></summary>
+      <div class="tabella-wrap" style="box-shadow:none;margin-top:12px"><table>
+        <thead><tr><th>Marchio</th><th>Esito</th><th>SUV elettrici e motivo</th></tr></thead>
+        <tbody>${lista.map(x => `<tr><th>${esc(x.marchio)}${x.gruppo ? `<div class="muto piccolo">${esc(x.gruppo)}</div>` : ''}</th><td><span class="chip ${x.esito === 'candidato' ? 'si' : x.esito === 'escluso' ? 'no' : ''}">${esc(x.esito || '')}</span></td><td class="piccolo">${(x.modelli_suv_ev || []).map(s => `<div><b>${esc(s.modello)}</b>${s.motivo ? ': ' + esc(s.motivo) : ''}</div>`).join('') || esc(x.motivo_esclusione || '')}${x.motivo_esclusione && (x.modelli_suv_ev || []).length ? `<div class="muto">${esc(x.motivo_esclusione)}</div>` : ''}</td></tr>`).join('')}</tbody>
+      </table></div></details>`;
   }
 
   // ---------- SCHEDA ----------
